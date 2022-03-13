@@ -39,23 +39,23 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #define LITEETH_RX_BASE		DT_INST_REG_ADDR_BY_NAME(0, control)
 #define LITEETH_RX_SLOT		((LITEETH_RX_BASE) + 0x00)
 #define LITEETH_RX_LENGTH	((LITEETH_RX_BASE) + 0x04)
-#define LITEETH_RX_EV_PENDING	((LITEETH_RX_BASE) + 0x28)
-#define LITEETH_RX_EV_ENABLE	((LITEETH_RX_BASE) + 0x2c)
+#define LITEETH_RX_EV_PENDING	((LITEETH_RX_BASE) + 0x10)
+#define LITEETH_RX_EV_ENABLE	((LITEETH_RX_BASE) + 0x14)
 
 /* sram - tx */
-#define LITEETH_TX_BASE		((DT_INST_REG_ADDR_BY_NAME(0, control)) + 0x30)
+#define LITEETH_TX_BASE		((DT_INST_REG_ADDR_BY_NAME(0, control)) + 0x18)
 #define LITEETH_TX_START	((LITEETH_TX_BASE) + 0x00)
 #define LITEETH_TX_READY	((LITEETH_TX_BASE) + 0x04)
 #define LITEETH_TX_SLOT		((LITEETH_TX_BASE) + 0x0c)
 #define LITEETH_TX_LENGTH	((LITEETH_TX_BASE) + 0x10)
-#define LITEETH_TX_EV_PENDING	((LITEETH_TX_BASE) + 0x1c)
+#define LITEETH_TX_EV_PENDING	((LITEETH_TX_BASE) + 0x18)
 
 /* irq */
 #define LITEETH_IRQ		DT_INST_IRQN(0)
 #define LITEETH_IRQ_PRIORITY	DT_INST_IRQ(0, priority)
 
 #define MAX_TX_FAILURE 100
-
+extern bool halt_net_tx;
 struct eth_liteeth_dev_data {
 	struct net_if *iface;
 	uint8_t mac_addr[6];
@@ -82,6 +82,7 @@ static int eth_initialize(const struct device *dev)
 
 static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 {
+	if(halt_net_tx) { return 0; }
 	int key;
 	uint16_t len;
 	struct eth_liteeth_dev_data *context = dev->data;
@@ -93,25 +94,63 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 	len = net_pkt_get_len(pkt);
 	net_pkt_read(pkt, context->tx_buf[context->txslot], len);
 
-	sys_write8(context->txslot, LITEETH_TX_SLOT);
-	sys_write8(len >> 8, LITEETH_TX_LENGTH);
-	sys_write8(len & 0xFF, LITEETH_TX_LENGTH + 4);
-
-	/* wait for the device to be ready to transmit */
-	while (sys_read8(LITEETH_TX_READY) == 0) {
-		if (attempts++ == MAX_TX_FAILURE) {
-			goto error;
-		}
-		k_sleep(K_MSEC(1));
+	uint32_t* slot_base = (uint32_t *)(context->tx_buf[context->txslot]);
+	uint32_t magic = *(slot_base + 9);
+// 	LOG_ERR("Looking at %ul for magic: %ul\n",(uint32_t)slot_base,magic);
+// 	LOG_ERR("Looking at 0x%08x for magic: 0x%08x\n",(uint32_t)slot_base,magic);
+	//Magic is the destination port (1337) and length
+	if(magic == 0xce033905) {
+		LOG_INF("FPGA Configuration Packet found, setting up FPGA Tx Slots");
+		//Zero out checksum
+		*(context->tx_buf[context->txslot]+40) = 0x00;
+		*(context->tx_buf[context->txslot]+41) = 0x00;
+		memcpy((uint32_t*)(0x80002000 + 0x000), context->tx_buf[context->txslot], 42);
+		memcpy((uint32_t*)(0x80002000 + 0x800), context->tx_buf[context->txslot], 42);
 	}
 
+// 	uint32_t* ctrl_reg = (uint32_t*)0xf0002800;
+// 	uint32_t reg_before = *ctrl_reg;
+// 	*ctrl_reg = 0;
+	uint32_t* rgb_start = (uint32_t*)0xf0002808;
+	uint32_t* rgb_slot = (uint32_t*)0xf000280c;
+	uint32_t* rgb_length = (uint32_t*)0xf0002810;
+
+	while (sys_read32(LITEETH_TX_READY) == 0) {
+// 		if (attempts++ == MAX_TX_FAILURE) {
+			goto error;
+// 		}
+		//k_sleep(K_MSEC(1));
+	}
+	*rgb_slot = context->txslot;
+	*rgb_length = len;
+	*rgb_start = 1;
+// 	sys_write8(context->txslot, LITEETH_TX_SLOT);
+// 	sys_write32(len, LITEETH_TX_LENGTH);
+
+	//Read this a fiew times??
+// 	for(int i = 0; i < 10; i++) {
+// 		sys_read8(LITEETH_TX_READY);
+// 	}
+	/* wait for the device to be ready to transmit */
+// 	while (sys_read32(LITEETH_TX_READY) == 0) {
+// 		if (attempts++ == MAX_TX_FAILURE) {
+// 			goto error;
+// 		}
+		//k_sleep(K_MSEC(1));
+// 	}
+
 	/* start transmitting */
-	sys_write8(1, LITEETH_TX_START);
+// 	sys_write8(1, LITEETH_TX_START);
+// 	while (sys_read32(LITEETH_TX_READY) == 0) {
+// 		LOG_ERR("TX fifo nailed");
+// 	}
+// 	*ctrl_reg = reg_before;
 
 	/* change slot */
 	context->txslot = (context->txslot + 1) % 2;
 
 	irq_unlock(key);
+//  	printk("ok\n");
 
 	return 0;
 error:
@@ -130,12 +169,7 @@ static void eth_rx(const struct device *port)
 	uint16_t len = 0;
 
 	key = irq_lock();
-
-	/* get frame's length */
-	for (int i = 0; i < 4; i++) {
-		len <<= 8;
-		len |= sys_read8(LITEETH_RX_LENGTH + i * 0x4);
-	}
+	len = sys_read32(LITEETH_RX_LENGTH);
 
 	/* which slot is the frame in */
 	context->rxslot = sys_read8(LITEETH_RX_SLOT);
@@ -144,7 +178,7 @@ static void eth_rx(const struct device *port)
 	pkt = net_pkt_rx_alloc_with_buffer(context->iface, len, AF_UNSPEC, 0,
 					   K_NO_WAIT);
 	if (pkt == NULL) {
-		LOG_ERR("Failed to obtain RX buffer");
+		LOG_ERR("Failed to obtain RX buffer len: %d",len);
 		goto out;
 	}
 

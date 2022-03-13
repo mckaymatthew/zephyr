@@ -66,13 +66,8 @@ int sys_clock_driver_init(const struct device *dev)
 	irq_enable(TIMER_IRQ);
 
 	sys_write8(TIMER_DISABLE, TIMER_EN_ADDR);
-
-	for (int i = 0; i < 4; i++) {
-		sys_write8(k_ticks_to_cyc_floor32(1) >> (24 - i * 8),
-				TIMER_RELOAD_ADDR + i * 0x4);
-		sys_write8(k_ticks_to_cyc_floor32(1) >> (24 - i * 8),
-				TIMER_LOAD_ADDR + i * 0x4);
-	}
+	sys_write32(k_ticks_to_cyc_floor32(1), TIMER_RELOAD_ADDR);
+	sys_write32(k_ticks_to_cyc_floor32(1), TIMER_LOAD_ADDR);
 
 	sys_write8(TIMER_ENABLE, TIMER_EN_ADDR);
 	sys_write8(sys_read8(TIMER_EV_PENDING_ADDR), TIMER_EV_PENDING_ADDR);

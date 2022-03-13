@@ -19,7 +19,7 @@
 		#address-cells = <1>;
 		#size-cells = <0>;
 		cpu@0 {
-			clock-frequency = <100000000>;
+			clock-frequency = <80000000>;
 			compatible = "riscv";
 			device_type = "cpu";
 			reg = <0>;
@@ -171,6 +171,27 @@
 			label = "i2s_tx";
 			status = "disabled";
 		};
+
+		uart1: serial@f0005800 {
+			compatible = "litex,uart1";
+			interrupt-parent = <&intc0>;
+			interrupts = <2 10>;
+			reg = <0xf0005800 0x18>;
+			reg-names = "control";
+			label = "uart1";
+			status = "okay";
+		};
+
+		uart2: serial@f0006000 {
+			compatible = "litex,uart2";
+			interrupt-parent = <&intc0>;
+			interrupts = <2 10>;
+			reg = <0xf0006000 0x18>;
+			reg-names = "control";
+			label = "uart2";
+			status = "okay";
+		};
+
 		clock-outputs {
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -179,7 +200,7 @@
 				reg = <0>;
 				compatible = "litex,clkout";
 				clock-output-names = "CLK_0";
-				litex,clock-frequency = <100000000>;
+				litex,clock-frequency = <80000000>;
 				litex,clock-phase = <0>;
 				litex,clock-duty-num = <1>;
 				litex,clock-duty-den = <2>;
@@ -192,7 +213,7 @@
 				reg = <1>;
 				compatible = "litex,clkout";
 				clock-output-names = "CLK_1";
-				litex,clock-frequency = <100000000>;
+				litex,clock-frequency = <80000000>;
 				litex,clock-phase = <0>;
 				litex,clock-duty-num = <1>;
 				litex,clock-duty-den = <2>;
@@ -225,7 +246,7 @@
 			clock-output-names = "CLK_0", "CLK_1";
 			litex,lock-timeout = <10>;
 			litex,drdy-timeout = <10>;
-			litex,sys-clock-frequency = <100000000>;
+			litex,sys-clock-frequency = <80000000>;
 			litex,divclk-divide-min = <1>;
 			litex,divclk-divide-max = <107>;
 			litex,clkfbout-mult-min = <2>;

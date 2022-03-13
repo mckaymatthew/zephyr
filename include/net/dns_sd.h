@@ -160,7 +160,7 @@ extern "C" {
  */
 #define DNS_SD_REGISTER_TCP_SERVICE(id, instance, service, domain, text, \
 				    port)				 \
-	static const uint16_t id ## _port = sys_cpu_to_be16(port); \
+	static const uint16_t id ## _port = *port; \
 	DNS_SD_REGISTER_SERVICE(id, instance, service, "_tcp", domain,	 \
 				text, &id ## _port)
 

@@ -135,7 +135,7 @@ static int cmd_load(const struct shell *sh, size_t argc, char **argv)
 
 static int memory_read(const struct shell *sh, mem_addr_t addr, uint8_t width)
 {
-	uint64_t value;
+	uint64_t value = 0xFEED;
 	int err = 0;
 
 	switch (width) {
@@ -146,7 +146,8 @@ static int memory_read(const struct shell *sh, mem_addr_t addr, uint8_t width)
 		value = sys_read16(addr);
 		break;
 	case 32:
-		value = sys_read32(addr);
+		value = *((uint32_t *)addr);
+// 		value = sys_read32(addr);
 		break;
 	default:
 		shell_fprintf(sh, SHELL_NORMAL, "Incorrect data width\n");

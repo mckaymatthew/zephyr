@@ -88,7 +88,6 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 	struct eth_liteeth_dev_data *context = dev->data;
 
 	key = irq_lock();
-	int attempts = 0;
 
 	/* get data from packet and send it */
 	len = net_pkt_get_len(pkt);
@@ -108,44 +107,13 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 		memcpy((uint32_t*)(0x80002000 + 0x800), context->tx_buf[context->txslot], 42);
 	}
 
-// 	uint32_t* ctrl_reg = (uint32_t*)0xf0002800;
-// 	uint32_t reg_before = *ctrl_reg;
-// 	*ctrl_reg = 0;
 	uint32_t* rgb_start = (uint32_t*)0xf0002808;
 	uint32_t* rgb_slot = (uint32_t*)0xf000280c;
 	uint32_t* rgb_length = (uint32_t*)0xf0002810;
 
-	while (sys_read32(LITEETH_TX_READY) == 0) {
-// 		if (attempts++ == MAX_TX_FAILURE) {
-			goto error;
-// 		}
-		//k_sleep(K_MSEC(1));
-	}
 	*rgb_slot = context->txslot;
 	*rgb_length = len;
 	*rgb_start = 1;
-// 	sys_write8(context->txslot, LITEETH_TX_SLOT);
-// 	sys_write32(len, LITEETH_TX_LENGTH);
-
-	//Read this a fiew times??
-// 	for(int i = 0; i < 10; i++) {
-// 		sys_read8(LITEETH_TX_READY);
-// 	}
-	/* wait for the device to be ready to transmit */
-// 	while (sys_read32(LITEETH_TX_READY) == 0) {
-// 		if (attempts++ == MAX_TX_FAILURE) {
-// 			goto error;
-// 		}
-		//k_sleep(K_MSEC(1));
-// 	}
-
-	/* start transmitting */
-// 	sys_write8(1, LITEETH_TX_START);
-// 	while (sys_read32(LITEETH_TX_READY) == 0) {
-// 		LOG_ERR("TX fifo nailed");
-// 	}
-// 	*ctrl_reg = reg_before;
-
 	/* change slot */
 	context->txslot = (context->txslot + 1) % 2;
 
